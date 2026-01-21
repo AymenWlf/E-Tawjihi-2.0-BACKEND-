@@ -80,7 +80,7 @@ final class Version20260107130610 extends AbstractMigration
              AND INDEX_NAME = 'IDX_9D0968118BAC62AF'"
         );
         if (!$hasIndex) {
-            $this->addSql('CREATE INDEX IDX_9D0968118BAC62AF ON campus (city_id)');
+        $this->addSql('CREATE INDEX IDX_9D0968118BAC62AF ON campus (city_id)');
         }
     }
 

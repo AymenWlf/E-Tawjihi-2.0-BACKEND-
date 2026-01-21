@@ -6,6 +6,14 @@ nelmio_cors:
             - 'http://localhost:5174'
             - 'https://localhost:5173'
             - 'https://localhost:5174'
+            - 'https://e-tawjihi.ma'
+            - 'https://www.e-tawjihi.ma'
+            - 'https://e-tawjihi.com'
+            - 'https://www.e-tawjihi.com'
+            - 'https://new.e-tawjihi.com'
+            - 'https://www.new.e-tawjihi.com'
+            - 'https://apinew.e-tawjihi.com'
+            - 'https://www.apinew.e-tawjihi.com'
         allow_methods: ['GET', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']
         allow_headers: ['Content-Type', 'Authorization', 'X-Requested-With']
         expose_headers: ['Link']

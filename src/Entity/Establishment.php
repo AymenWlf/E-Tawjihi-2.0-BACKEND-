@@ -48,9 +48,10 @@ class Establishment
     #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
     private ?string $pays = null;
 
-    #[ORM\Column(length: 255, nullable: true)]
+    #[ORM\ManyToOne(targetEntity: Universite::class, inversedBy: 'establishments')]
+    #[ORM\JoinColumn(name: 'universite_id', referencedColumnName: 'id', nullable: true, onDelete: 'SET NULL')]
     #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
-    private ?string $universite = null;
+    private ?Universite $universite = null;
 
     #[ORM\Column(type: Types::TEXT, nullable: true)]
     #[Groups(['establishment:read', 'establishment:write'])]
@@ -117,15 +118,15 @@ class Establishment
     private ?int $anneeCreation = null;
 
     #[ORM\Column]
-    #[Groups(['establishment:read', 'establishment:write'])]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
     private ?bool $accreditationEtat = false;
 
     #[ORM\Column]
-    #[Groups(['establishment:read', 'establishment:write'])]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
     private ?bool $concours = false;
 
     #[ORM\Column]
-    #[Groups(['establishment:read', 'establishment:write'])]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
     private ?bool $echangeInternational = false;
 
     #[ORM\Column(nullable: true)]
@@ -155,6 +156,26 @@ class Establishment
     #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
     #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
     private ?string $fraisInscriptionMax = null;
+
+    #[ORM\Column]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
+    private ?bool $gratuit = false;
+
+    #[ORM\Column]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
+    private ?bool $boursesDisponibles = false;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
+    private ?string $bourseMin = null;
+
+    #[ORM\Column(type: Types::DECIMAL, precision: 10, scale: 2, nullable: true)]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
+    private ?string $bourseMax = null;
+
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
+    private ?array $typesBourse = null; // ['financiere', 'logement', 'reduction_scolarite']
 
     #[ORM\Column(type: Types::JSON, nullable: true)]
     #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
@@ -232,6 +253,9 @@ class Establishment
     #[Groups(['establishment:read'])]
     private Collection $filieres;
 
+    #[ORM\OneToMany(targetEntity: \App\Entity\EstablishmentQuestion::class, mappedBy: 'establishment', cascade: ['persist', 'remove'], orphanRemoval: true)]
+    private Collection $questions;
+
     #[ORM\Column(length: 50, nullable: true)]
     #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
     private ?string $status = 'Brouillon';
@@ -260,6 +284,18 @@ class Establishment
     #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
     private ?array $combinaisonsBacMission = null; // Pour bac mission: [['Mathématiques', 'Physique-Chimie'], ['SVT', 'NSI']]
 
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
+    private ?array $secteursIds = null; // IDs des secteurs de métiers associés
+
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
+    private ?array $filieresIds = null; // IDs des filières d'études associées
+
+    #[ORM\Column(type: Types::INTEGER)]
+    #[Groups(['establishment:read', 'establishment:write', 'establishment:list'])]
+    private ?int $viewCount = 0; // Nombre de vues de l'établissement
+
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     #[Groups(['establishment:read', 'establishment:list'])]
     private ?\DateTimeInterface $createdAt = null;
@@ -272,6 +308,7 @@ class Establishment
     {
         $this->campus = new ArrayCollection();
         $this->filieres = new ArrayCollection();
+        $this->questions = new ArrayCollection();
         $this->createdAt = new \DateTime();
         $this->updatedAt = new \DateTime();
     }
@@ -364,15 +401,21 @@ class Establishment
         return $this;
     }
 
-    public function getUniversite(): ?string
+    public function getUniversite(): ?Universite
     {
         return $this->universite;
     }
 
-    public function setUniversite(?string $universite): static
+    public function setUniversite(?Universite $universite): static
     {
         $this->universite = $universite;
         return $this;
+    }
+
+    // Méthode de compatibilité temporaire pour obtenir le nom de l'université
+    public function getUniversiteNom(): ?string
+    {
+        return $this->universite ? $this->universite->getNom() : null;
     }
 
     public function getDescription(): ?string
@@ -658,6 +701,61 @@ class Establishment
     public function setFraisInscriptionMax(?string $fraisInscriptionMax): static
     {
         $this->fraisInscriptionMax = $fraisInscriptionMax;
+        return $this;
+    }
+
+    public function isGratuit(): ?bool
+    {
+        return $this->gratuit;
+    }
+
+    public function setGratuit(bool $gratuit): static
+    {
+        $this->gratuit = $gratuit;
+        return $this;
+    }
+
+    public function isBoursesDisponibles(): ?bool
+    {
+        return $this->boursesDisponibles;
+    }
+
+    public function setBoursesDisponibles(bool $boursesDisponibles): static
+    {
+        $this->boursesDisponibles = $boursesDisponibles;
+        return $this;
+    }
+
+    public function getBourseMin(): ?string
+    {
+        return $this->bourseMin;
+    }
+
+    public function setBourseMin(?string $bourseMin): static
+    {
+        $this->bourseMin = $bourseMin;
+        return $this;
+    }
+
+    public function getBourseMax(): ?string
+    {
+        return $this->bourseMax;
+    }
+
+    public function setBourseMax(?string $bourseMax): static
+    {
+        $this->bourseMax = $bourseMax;
+        return $this;
+    }
+
+    public function getTypesBourse(): ?array
+    {
+        return $this->typesBourse;
+    }
+
+    public function setTypesBourse(?array $typesBourse): static
+    {
+        $this->typesBourse = $typesBourse;
         return $this;
     }
 
@@ -952,6 +1050,45 @@ class Establishment
     public function setCombinaisonsBacMission(?array $combinaisonsBacMission): static
     {
         $this->combinaisonsBacMission = $combinaisonsBacMission;
+        return $this;
+    }
+
+    public function getSecteursIds(): ?array
+    {
+        return $this->secteursIds;
+    }
+
+    public function setSecteursIds(?array $secteursIds): static
+    {
+        $this->secteursIds = $secteursIds;
+        return $this;
+    }
+
+    public function getFilieresIds(): ?array
+    {
+        return $this->filieresIds;
+    }
+
+    public function setFilieresIds(?array $filieresIds): static
+    {
+        $this->filieresIds = $filieresIds;
+        return $this;
+    }
+
+    public function getViewCount(): ?int
+    {
+        return $this->viewCount;
+    }
+
+    public function setViewCount(int $viewCount): static
+    {
+        $this->viewCount = $viewCount;
+        return $this;
+    }
+
+    public function incrementViewCount(): static
+    {
+        $this->viewCount = ($this->viewCount ?? 0) + 1;
         return $this;
     }
 

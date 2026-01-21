@@ -3,6 +3,8 @@
 namespace App\Controller\Api;
 
 use App\Entity\User;
+use App\Entity\UserProfile;
+use App\Repository\UserProfileRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -88,7 +90,8 @@ class AuthController extends AbstractController
     #[Route('/api/user/profile', name: 'api_user_profile', methods: ['GET'])]
     public function getProfile(
         #[CurrentUser] ?User $user,
-        EntityManagerInterface $em
+        EntityManagerInterface $em,
+        UserProfileRepository $profileRepository
     ): JsonResponse {
         if (!$user) {
             return new JsonResponse([
@@ -97,24 +100,32 @@ class AuthController extends AbstractController
             ], Response::HTTP_UNAUTHORIZED);
         }
 
-        $profile = $user->getProfile();
+        // Charger le profil avec la relation ville en utilisant le repository
+        $profile = $profileRepository->createQueryBuilder('p')
+            ->leftJoin('p.ville', 'v')
+            ->addSelect('v')
+            ->where('p.user = :user')
+            ->setParameter('user', $user)
+            ->getQuery()
+            ->getOneOrNullResult();
         
         if (!$profile) {
+            error_log('[AuthController::getProfile] Aucun profil trouvé pour l\'utilisateur ID: ' . $user->getId());
             return new JsonResponse([
                 'success' => true,
-                'data' => null
+                'data' => null,
+                'message' => 'Aucun profil trouvé pour cet utilisateur'
             ]);
         }
 
         $ville = $profile->getVille();
         
-        return new JsonResponse([
-            'success' => true,
-            'data' => [
+        $profileData = [
                 'id' => $profile->getId(),
                 'nom' => $profile->getNom(),
                 'prenom' => $profile->getPrenom(),
-                'email' => $profile->getEmail(),
+            'email' => $profile->getEmail() ?? $user->getEmail(),
+            'telephone' => $user->getPhone(),
                 'dateNaissance' => $profile->getDateNaissance() ? $profile->getDateNaissance()->format('Y-m-d') : null,
                 'genre' => $profile->getGenre(),
                 'ville' => $ville ? [
@@ -129,8 +140,27 @@ class AuthController extends AbstractController
                 'specialite2' => $profile->getSpecialite2(),
                 'specialite3' => $profile->getSpecialite3(),
                 'diplomeEnCours' => $profile->getDiplomeEnCours(),
-                'nomEtablissement' => $profile->getNomEtablissement()
-            ]
+            'nomEtablissement' => $profile->getNomEtablissement(),
+            'typeEcolePrefere' => $profile->getTypeEcolePrefere(),
+            'servicesPrefere' => $profile->getServicesPrefere(),
+            'tuteur' => $profile->getTuteur(),
+            'nomTuteur' => $profile->getNomTuteur(),
+            'prenomTuteur' => $profile->getPrenomTuteur(),
+            'telTuteur' => $profile->getTelTuteur(),
+            'professionTuteur' => $profile->getProfessionTuteur(),
+            'adresseTuteur' => $profile->getAdresseTuteur(),
+            'consentContact' => $profile->getConsentContact(),
+            'planReussiteSteps' => $profile->getPlanReussiteSteps() ?? [],
+            'createdAt' => $profile->getCreatedAt() ? $profile->getCreatedAt()->format('Y-m-d H:i:s') : null,
+            'updatedAt' => $profile->getUpdatedAt() ? $profile->getUpdatedAt()->format('Y-m-d H:i:s') : null
+        ];
+        
+        error_log('[AuthController::getProfile] Profil trouvé pour l\'utilisateur ID: ' . $user->getId() . ', Profil ID: ' . $profile->getId());
+        error_log('[AuthController::getProfile] Données du profil: ' . json_encode($profileData));
+        
+        return new JsonResponse([
+            'success' => true,
+            'data' => $profileData
         ]);
     }
 
@@ -171,6 +201,18 @@ class AuthController extends AbstractController
 
         $em->persist($user);
         $em->flush();
+
+        // Créer une notification de bienvenue
+        try {
+            $notificationService = new \App\Service\NotificationService(
+                $em,
+                $em->getRepository(\App\Entity\Notification::class)
+            );
+            $notificationService->createWelcomeNotification($user);
+        } catch (\Exception $e) {
+            // Log l'erreur mais ne fait pas échouer l'inscription
+            error_log('Erreur lors de la création de la notification de bienvenue: ' . $e->getMessage());
+        }
 
         // Générer le token JWT pour le nouvel utilisateur
         $token = $jwtManager->create($user);
@@ -305,11 +347,17 @@ class AuthController extends AbstractController
             
             // Ville
             if (!empty($data['ville']) && is_numeric($data['ville'])) {
-                $city = $em->getRepository(\App\Entity\City::class)->find((int)$data['ville']);
+                $cityId = (int)$data['ville'];
+                $log("Recherche de la ville avec ID: " . $cityId);
+                $city = $em->getRepository(\App\Entity\City::class)->find($cityId);
                 if ($city) {
                     $profile->setVille($city);
-                    $log("✓ Ville définie: " . $city->getTitre());
+                    $log("✓ Ville définie: " . $city->getTitre() . " (ID: " . $city->getId() . ")");
+                } else {
+                    $log("⚠️ ATTENTION: Ville avec ID " . $cityId . " non trouvée dans la base de données");
                 }
+            } else {
+                $log("⚠️ Ville non définie ou invalide: " . ($data['ville'] ?? 'null') . " (type: " . gettype($data['ville'] ?? null) . ")");
             }
             $log("✓ Informations personnelles définies");
 
@@ -434,5 +482,279 @@ class AuthController extends AbstractController
                 'profile' => $profileData
             ]
         ], Response::HTTP_OK);
+    }
+
+    #[Route('/api/user/profile', name: 'api_user_profile_update', methods: ['PUT'])]
+    public function updateProfile(
+        Request $request,
+        #[CurrentUser] ?User $user,
+        EntityManagerInterface $em,
+        LoggerInterface $logger
+    ): JsonResponse {
+        if (!$user) {
+            return new JsonResponse([
+                'success' => false,
+                'message' => 'Non authentifié'
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $logFile = '/tmp/profile_update.log';
+        $log = function($message) use ($logFile, $logger) {
+            $timestamp = date('Y-m-d H:i:s');
+            file_put_contents($logFile, "[$timestamp] $message\n", FILE_APPEND);
+            $logger->info($message);
+        };
+
+        $log("=== MISE À JOUR DU PROFIL ===");
+        $log("User ID: " . $user->getId());
+
+        $data = json_decode($request->getContent(), true);
+        if (!$data) {
+            $log("ERREUR: Aucune donnée reçue");
+            return new JsonResponse([
+                'success' => false,
+                'message' => 'Aucune donnée reçue'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $log("Données reçues: " . count($data) . " champs");
+
+        // Récupérer ou créer le profil
+        $profile = $user->getProfile();
+        if (!$profile) {
+            $log("Création d'un nouveau profil");
+            $profile = new \App\Entity\UserProfile();
+            $profile->setCreatedAt(new \DateTime());
+            $profile->setUser($user);
+            $user->setProfile($profile);
+        } else {
+            $log("Profil existant trouvé - ID: " . $profile->getId());
+        }
+        $profile->setUpdatedAt(new \DateTime());
+
+        try {
+            // Informations académiques
+            if (isset($data['niveau'])) $profile->setNiveau($data['niveau']);
+            if (isset($data['bacType'])) $profile->setBacType($data['bacType']);
+            if (isset($data['filiere'])) $profile->setFiliere($data['filiere']);
+            if (isset($data['specialite1'])) $profile->setSpecialite1($data['specialite1']);
+            if (isset($data['specialite2'])) $profile->setSpecialite2($data['specialite2']);
+            if (isset($data['specialite3'])) $profile->setSpecialite3($data['specialite3']);
+            if (isset($data['diplomeEnCours'])) $profile->setDiplomeEnCours($data['diplomeEnCours']);
+            if (isset($data['nomEtablissement'])) $profile->setNomEtablissement($data['nomEtablissement']);
+            if (isset($data['userType'])) $profile->setUserType($data['userType']);
+
+            // Préférences
+            if (isset($data['typeEcolePrefere'])) {
+                $profile->setTypeEcolePrefere(
+                    !empty($data['typeEcolePrefere']) && is_array($data['typeEcolePrefere']) 
+                        ? $data['typeEcolePrefere'] 
+                        : null
+                );
+            }
+            if (isset($data['servicesPrefere'])) {
+                $profile->setServicesPrefere(
+                    !empty($data['servicesPrefere']) && is_array($data['servicesPrefere']) 
+                        ? $data['servicesPrefere'] 
+                        : null
+                );
+            }
+
+            // Informations personnelles
+            if (isset($data['nom'])) $profile->setNom($data['nom']);
+            if (isset($data['prenom'])) $profile->setPrenom($data['prenom']);
+            if (isset($data['genre'])) $profile->setGenre($data['genre']);
+            
+            if (isset($data['email']) && !empty($data['email'])) {
+                $profile->setEmail($data['email']);
+                $user->setEmail($data['email']);
+            }
+            
+            if (isset($data['dateNaissance']) && !empty($data['dateNaissance'])) {
+                try {
+                    $profile->setDateNaissance(new \DateTime($data['dateNaissance']));
+                } catch (\Exception $e) {
+                    $log("ATTENTION: Erreur de date - " . $e->getMessage());
+                }
+            }
+            
+            // Ville
+            if (isset($data['ville']) && !empty($data['ville']) && is_numeric($data['ville'])) {
+                $cityId = (int)$data['ville'];
+                $log("Recherche de la ville avec ID: " . $cityId);
+                $city = $em->getRepository(\App\Entity\City::class)->find($cityId);
+                if ($city) {
+                    $profile->setVille($city);
+                    $log("✓ Ville définie: " . $city->getTitre() . " (ID: " . $city->getId() . ")");
+                } else {
+                    $log("⚠️ ATTENTION: Ville avec ID " . $cityId . " non trouvée dans la base de données");
+                }
+            } elseif (isset($data['ville']) && $data['ville'] === null) {
+                // Permettre de réinitialiser la ville à null
+                $profile->setVille(null);
+                $log("✓ Ville réinitialisée à null");
+            }
+
+            // Informations tuteur (optionnel)
+            if (isset($data['tuteur'])) $profile->setTuteur($data['tuteur']);
+            if (isset($data['nomTuteur'])) $profile->setNomTuteur($data['nomTuteur']);
+            if (isset($data['prenomTuteur'])) $profile->setPrenomTuteur($data['prenomTuteur']);
+            if (isset($data['telTuteur'])) $profile->setTelTuteur($data['telTuteur']);
+            if (isset($data['professionTuteur'])) $profile->setProfessionTuteur($data['professionTuteur']);
+            if (isset($data['adresseTuteur'])) $profile->setAdresseTuteur($data['adresseTuteur']);
+            
+            // Accord
+            if (isset($data['consentContact'])) {
+                $profile->setConsentContact((bool)$data['consentContact']);
+            }
+
+            // Persister les changements
+            $em->persist($profile);
+            $em->persist($user);
+            $em->flush();
+
+            $log("✓ Profil mis à jour avec succès");
+
+            // Charger le profil mis à jour avec la relation ville
+            $profileRepository = $em->getRepository(\App\Entity\UserProfile::class);
+            $updatedProfile = $profileRepository->createQueryBuilder('p')
+                ->leftJoin('p.ville', 'v')
+                ->addSelect('v')
+                ->where('p.id = :id')
+                ->setParameter('id', $profile->getId())
+                ->getQuery()
+                ->getOneOrNullResult();
+
+            $ville = $updatedProfile ? $updatedProfile->getVille() : null;
+            
+            $profileData = [
+                'id' => $updatedProfile->getId(),
+                'nom' => $updatedProfile->getNom(),
+                'prenom' => $updatedProfile->getPrenom(),
+                'email' => $updatedProfile->getEmail(),
+                'telephone' => $user->getPhone(),
+                'dateNaissance' => $updatedProfile->getDateNaissance() ? $updatedProfile->getDateNaissance()->format('Y-m-d') : null,
+                'genre' => $updatedProfile->getGenre(),
+                'ville' => $ville ? [
+                    'id' => $ville->getId(),
+                    'titre' => $ville->getTitre(),
+                ] : null,
+                'userType' => $updatedProfile->getUserType(),
+                'niveau' => $updatedProfile->getNiveau(),
+                'bacType' => $updatedProfile->getBacType(),
+                'filiere' => $updatedProfile->getFiliere(),
+                'specialite1' => $updatedProfile->getSpecialite1(),
+                'specialite2' => $updatedProfile->getSpecialite2(),
+                'specialite3' => $updatedProfile->getSpecialite3(),
+                'diplomeEnCours' => $updatedProfile->getDiplomeEnCours(),
+                'nomEtablissement' => $updatedProfile->getNomEtablissement(),
+                'typeEcolePrefere' => $updatedProfile->getTypeEcolePrefere(),
+                'servicesPrefere' => $updatedProfile->getServicesPrefere(),
+                'tuteur' => $updatedProfile->getTuteur(),
+                'nomTuteur' => $updatedProfile->getNomTuteur(),
+                'prenomTuteur' => $updatedProfile->getPrenomTuteur(),
+                'telTuteur' => $updatedProfile->getTelTuteur(),
+                'professionTuteur' => $updatedProfile->getProfessionTuteur(),
+                'adresseTuteur' => $updatedProfile->getAdresseTuteur(),
+                'consentContact' => $updatedProfile->getConsentContact(),
+                'createdAt' => $updatedProfile->getCreatedAt() ? $updatedProfile->getCreatedAt()->format('Y-m-d H:i:s') : null,
+                'updatedAt' => $updatedProfile->getUpdatedAt() ? $updatedProfile->getUpdatedAt()->format('Y-m-d H:i:s') : null,
+            ];
+
+            return new JsonResponse([
+                'success' => true,
+                'message' => 'Profil mis à jour avec succès',
+                'data' => $profileData
+            ], Response::HTTP_OK);
+
+        } catch (\Exception $e) {
+            $log("ERREUR: " . $e->getMessage());
+            $log("Stack trace: " . $e->getTraceAsString());
+            return new JsonResponse([
+                'success' => false,
+                'message' => 'Erreur lors de la mise à jour du profil: ' . $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
+
+    #[Route('/api/user/plan-reussite/steps', name: 'api_user_plan_reussite_steps', methods: ['POST', 'PUT'])]
+    public function updatePlanReussiteSteps(
+        Request $request,
+        #[CurrentUser] ?User $user,
+        EntityManagerInterface $em
+    ): JsonResponse {
+        if (!$user) {
+            return new JsonResponse([
+                'success' => false,
+                'message' => 'Non authentifié'
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $data = json_decode($request->getContent(), true);
+        if (!isset($data['step'])) {
+            return new JsonResponse([
+                'success' => false,
+                'message' => 'Le champ "step" est requis'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $step = $data['step']; // 'reportStepCompleted', 'step3_visited', 'step4_visited', 'step5_visited'
+
+        // Récupérer ou créer le profil
+        $profile = $user->getProfile();
+        if (!$profile) {
+            $profile = new \App\Entity\UserProfile();
+            $profile->setCreatedAt(new \DateTime());
+            $profile->setUser($user);
+            $user->setProfile($profile);
+        }
+        $profile->setUpdatedAt(new \DateTime());
+
+        // Récupérer les étapes existantes ou initialiser un tableau vide
+        $steps = $profile->getPlanReussiteSteps() ?? [];
+        
+        // Marquer l'étape comme complétée
+        $steps[$step] = true;
+        
+        // Si c'est reportStepCompleted, enregistrer aussi la date
+        if ($step === 'reportStepCompleted') {
+            $steps['reportStepCompletedAt'] = (new \DateTime())->format('Y-m-d\TH:i:s');
+        }
+
+        $profile->setPlanReussiteSteps($steps);
+        $em->persist($profile);
+        $em->flush();
+
+        return new JsonResponse([
+            'success' => true,
+            'message' => 'Étape du plan de réussite mise à jour avec succès',
+            'data' => [
+                'planReussiteSteps' => $steps
+            ]
+        ]);
+    }
+
+    #[Route('/api/user/plan-reussite/steps', name: 'api_user_plan_reussite_steps_get', methods: ['GET'])]
+    public function getPlanReussiteSteps(
+        #[CurrentUser] ?User $user,
+        UserProfileRepository $profileRepository
+    ): JsonResponse {
+        if (!$user) {
+            return new JsonResponse([
+                'success' => false,
+                'message' => 'Non authentifié'
+            ], Response::HTTP_UNAUTHORIZED);
+        }
+
+        $profile = $profileRepository->findOneBy(['user' => $user]);
+        
+        $steps = $profile ? ($profile->getPlanReussiteSteps() ?? []) : [];
+
+        return new JsonResponse([
+            'success' => true,
+            'data' => [
+                'planReussiteSteps' => $steps
+            ]
+        ]);
     }
 }

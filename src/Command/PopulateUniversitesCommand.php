@@ -3,6 +3,7 @@
 namespace App\Command;
 
 use App\Entity\Universite;
+use App\Entity\Region;
 use Doctrine\ORM\EntityManagerInterface;
 use Symfony\Component\Console\Attribute\AsCommand;
 use Symfony\Component\Console\Command\Command;
@@ -53,6 +54,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UM5',
                 'nomArabe' => 'جامعة محمد الخامس',
                 'ville' => 'Rabat',
+                'region' => 'Rabat-Salé-Kénitra',
                 'pays' => 'Maroc',
                 'type' => 'Public',
                 'description' => 'Université public marocaine située à Rabat, fondée en 1957. Elle est l\'une des plus grandes universités du Maroc avec plusieurs facultés et écoles.',
@@ -66,7 +68,9 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UH2',
                 'nomArabe' => 'جامعة الحسن الثاني',
                 'ville' => 'Casablanca',
+                'region' => 'Casablanca-Settat',
                 'pays' => 'Maroc',
+                'type' => 'Public',
                 'description' => 'Université public marocaine située à Casablanca. Elle comprend plusieurs établissements répartis dans différentes villes.',
                 'siteWeb' => 'https://www.uh2.ac.ma',
                 'email' => 'contact@uh2.ac.ma',
@@ -78,6 +82,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UCA',
                 'nomArabe' => 'جامعة القاضي عياض',
                 'ville' => 'Marrakech',
+                'region' => 'Marrakech-Safi',
                 'pays' => 'Maroc',
                 'type' => 'Public',
                 'description' => 'Université public marocaine située à Marrakech, fondée en 1978. Elle est reconnue pour ses programmes en sciences et technologies.',
@@ -91,6 +96,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'USMBA',
                 'nomArabe' => 'جامعة سيدي محمد بن عبد الله',
                 'ville' => 'Fès',
+                'region' => 'Fès-Meknès',
                 'pays' => 'Maroc',
                 'type' => 'Public',
                 'description' => 'Université public marocaine située à Fès, fondée en 1975. Elle propose une large gamme de programmes académiques.',
@@ -104,6 +110,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UIT',
                 'nomArabe' => 'جامعة ابن طفيل',
                 'ville' => 'Kénitra',
+                'region' => 'Rabat-Salé-Kénitra',
                 'pays' => 'Maroc',
                 'type' => 'Public',
                 'description' => 'Université public marocaine située à Kénitra, fondée en 1989. Elle est spécialisée dans les sciences et technologies.',
@@ -117,6 +124,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UAE',
                 'nomArabe' => 'جامعة عبد المالك السعدي',
                 'ville' => 'Tétouan',
+                'region' => 'Tanger-Tétouan-Al Hoceïma',
                 'pays' => 'Maroc',
                 'type' => 'Public',
                 'description' => 'Université public marocaine située à Tétouan, fondée en 1989. Elle couvre plusieurs régions du nord du Maroc.',
@@ -130,6 +138,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UCD',
                 'nomArabe' => 'جامعة شعيب الدكالي',
                 'ville' => 'El Jadida',
+                'region' => 'Casablanca-Settat',
                 'pays' => 'Maroc',
                 'type' => 'Public',
                 'description' => 'Université public marocaine située à El Jadida, fondée en 1989. Elle propose des formations dans divers domaines.',
@@ -143,6 +152,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UIZ',
                 'nomArabe' => 'جامعة ابن زهر',
                 'ville' => 'Agadir',
+                'region' => 'Souss-Massa',
                 'pays' => 'Maroc',
                 'type' => 'Public',
                 'description' => 'Université public marocaine située à Agadir, fondée en 1989. Elle dessert la région de Souss-Massa.',
@@ -156,6 +166,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UMP',
                 'nomArabe' => 'جامعة محمد الأول',
                 'ville' => 'Oujda',
+                'region' => 'Oriental',
                 'pays' => 'Maroc',
                 'type' => 'Public',
                 'description' => 'Université public marocaine située à Oujda, fondée en 1978. Elle couvre la région de l\'Oriental.',
@@ -169,6 +180,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UMI',
                 'nomArabe' => 'جامعة مولاي إسماعيل',
                 'ville' => 'Meknès',
+                'region' => 'Fès-Meknès',
                 'pays' => 'Maroc',
                 'type' => 'Public',
                 'description' => 'Université public marocaine située à Meknès, fondée en 1982. Elle propose des formations variées.',
@@ -182,6 +194,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UPF',
                 'nomArabe' => 'الجامعة الخاصة بفاس',
                 'ville' => 'Fès',
+                'region' => 'Fès-Meknès',
                 'pays' => 'Maroc',
                 'type' => 'Privé',
                 'description' => 'Université privée marocaine située à Fès, offrant des formations dans plusieurs domaines.',
@@ -195,6 +208,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UEMF',
                 'nomArabe' => 'الجامعة الأورومتوسطية بفاس',
                 'ville' => 'Fès',
+                'region' => 'Fès-Meknès',
                 'pays' => 'Maroc',
                 'type' => 'Privé',
                 'description' => 'Université privée internationale située à Fès, offrant des formations d\'excellence.',
@@ -208,6 +222,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UM6P',
                 'nomArabe' => 'جامعة محمد السادس متعددة التخصصات',
                 'ville' => 'Ben Guerir',
+                'region' => 'Marrakech-Safi',
                 'pays' => 'Maroc',
                 'type' => 'Public',
                 'description' => 'Université semi-public marocaine située à Ben Guerir, spécialisée dans l\'innovation et la recherche.',
@@ -221,6 +236,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'Mundiapolis',
                 'nomArabe' => 'جامعة مونديابوليس بالدار البيضاء',
                 'ville' => 'Casablanca',
+                'region' => 'Casablanca-Settat',
                 'pays' => 'Maroc',
                 'type' => 'Privé',
                 'description' => 'Université privée marocaine située à Casablanca, offrant des formations modernes et innovantes.',
@@ -234,6 +250,7 @@ class PopulateUniversitesCommand extends Command
                 'sigle' => 'UIC',
                 'nomArabe' => 'الجامعة الدولية بالدار البيضاء',
                 'ville' => 'Casablanca',
+                'region' => 'Casablanca-Settat',
                 'pays' => 'Maroc',
                 'type' => 'Privé',
                 'description' => 'Université privée marocaine située à Casablanca, proposant des programmes internationaux.',
@@ -260,6 +277,7 @@ class PopulateUniversitesCommand extends Command
             $universite->setSigle($data['sigle']);
             $universite->setNomArabe($data['nomArabe'] ?? null);
             $universite->setVille($data['ville']);
+            $universite->setRegion($data['region'] ?? null);
             $universite->setPays($data['pays']);
             $universite->setType($data['type'] ?? null);
             $universite->setDescription($data['description'] ?? null);

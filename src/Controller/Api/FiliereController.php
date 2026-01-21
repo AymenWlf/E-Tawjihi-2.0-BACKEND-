@@ -8,6 +8,7 @@ use App\Entity\Campus;
 use App\Repository\FiliereRepository;
 use App\Repository\EstablishmentRepository;
 use App\Repository\CampusRepository;
+use App\Repository\SecteurRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -27,6 +28,7 @@ class FiliereController extends AbstractController
         private FiliereRepository $filiereRepository,
         private EstablishmentRepository $establishmentRepository,
         private CampusRepository $campusRepository,
+        private SecteurRepository $secteurRepository,
         private SerializerInterface $serializer,
         private SluggerInterface $slugger,
         private LoggerInterface $logger
@@ -102,6 +104,10 @@ class FiliereController extends AbstractController
                 ], Response::HTTP_NOT_FOUND);
             }
 
+            // Incrémenter le compteur de vues
+            $filiere->incrementViewCount();
+            $this->entityManager->flush();
+
             $data = $this->serializer->normalize($filiere, null, [
                 'groups' => ['filiere:read']
             ]);
@@ -141,6 +147,10 @@ class FiliereController extends AbstractController
                     'message' => 'Filière non trouvée'
                 ], Response::HTTP_NOT_FOUND);
             }
+
+            // Incrémenter le compteur de vues
+            $filiere->incrementViewCount();
+            $this->entityManager->flush();
 
             $data = $this->serializer->normalize($filiere, null, [
                 'groups' => ['filiere:read']
@@ -373,7 +383,15 @@ class FiliereController extends AbstractController
         if (isset($data['titreArabe'])) $filiere->setNomArabe($data['titreArabe']); // Alias pour compatibilité
         if (isset($data['slug'])) $filiere->setSlug($data['slug']);
         if (isset($data['description'])) $filiere->setDescription($data['description']);
-        if (isset($data['imageCouverture'])) $filiere->setImageCouverture($data['imageCouverture']);
+        
+        // Gérer l'image de couverture : mettre à jour seulement si une valeur est fournie
+        if (isset($data['imageCouverture']) && $data['imageCouverture'] !== '') {
+            $filiere->setImageCouverture($data['imageCouverture']);
+        } elseif (array_key_exists('imageCouverture', $data) && $data['imageCouverture'] === '') {
+            // Si imageCouverture est explicitement vide, la supprimer (mettre à null)
+            $filiere->setImageCouverture(null);
+        }
+        // Si imageCouverture n'est pas dans les données, on préserve la valeur existante
         if (isset($data['diplome'])) $filiere->setDiplome($data['diplome']);
         if (isset($data['domaine'])) $filiere->setDomaine($data['domaine']);
         if (isset($data['langueEtudes'])) $filiere->setLangueEtudes($data['langueEtudes']);
@@ -387,6 +405,15 @@ class FiliereController extends AbstractController
         if (isset($data['bacType'])) $filiere->setBacType($data['bacType']);
         if (isset($data['filieresAcceptees'])) $filiere->setFilieresAcceptees($data['filieresAcceptees']);
         if (isset($data['combinaisonsBacMission'])) $filiere->setCombinaisonsBacMission($data['combinaisonsBacMission']);
+        if (isset($data['secteursIds'])) {
+            // Normaliser les secteursIds : s'assurer que ce sont des entiers
+            if (is_array($data['secteursIds'])) {
+                $secteursIds = array_filter(array_map('intval', $data['secteursIds']));
+                $filiere->setSecteursIds(!empty($secteursIds) ? array_values($secteursIds) : null);
+            } else {
+                $filiere->setSecteursIds(null);
+            }
+        }
         if (isset($data['recommandee'])) $filiere->setRecommandee($data['recommandee']);
         if (isset($data['metier'])) $filiere->setMetier($data['metier']);
         if (isset($data['objectifs'])) $filiere->setObjectifs($data['objectifs']);
@@ -418,10 +445,8 @@ class FiliereController extends AbstractController
             $establishment = $filiere->getEstablishment();
         }
 
-        // Le logo de la filière est automatiquement celui de l'établissement
-        if ($establishment && $establishment->getLogo()) {
-            $filiere->setImageCouverture($establishment->getLogo());
-        }
+        // Ne pas définir automatiquement imageCouverture avec le logo de l'établissement
+        // La couverture de la filière doit persister indépendamment
 
         // Gérer les campus (plusieurs campus possibles)
         if (isset($data['campusIds'])) {
@@ -460,21 +485,50 @@ class FiliereController extends AbstractController
         // Informations de l'établissement
         if ($filiere->getEstablishment()) {
             $establishment = $filiere->getEstablishment();
+            
+            // Sérialiser l'université manuellement pour éviter les erreurs de sérialisation
+            $universiteData = null;
+            if ($establishment->getUniversite()) {
+                $universite = $establishment->getUniversite();
+                $universiteData = [
+                    'id' => $universite->getId(),
+                    'nom' => $universite->getNom(),
+                    'sigle' => $universite->getSigle(),
+                    'ville' => $universite->getVille(),
+                    'region' => $universite->getRegion(),
+                    'pays' => $universite->getPays(),
+                    'type' => $universite->getType(),
+                    'logo' => $universite->getLogo(),
+                    'isActive' => $universite->isActive()
+                ];
+            }
+            
             $data['establishment'] = [
                 'id' => $establishment->getId(),
                 'nom' => $establishment->getNom(),
                 'sigle' => $establishment->getSigle(),
+                'slug' => $establishment->getSlug(), // Ajouter le slug pour construire les liens
                 'logo' => $establishment->getLogo(),
+                'imageCouverture' => $establishment->getImageCouverture(), // Ajouter la couverture de l'établissement
                 'pays' => $establishment->getPays(),
-                'universite' => $establishment->getUniversite(),
+                'universite' => $universiteData,
                 'type' => $establishment->getType(),
                 'url' => '/etablissements/' . $establishment->getId() . '/' . $establishment->getSlug(),
-                'eTawjihiInscription' => $establishment->isETawjihiInscription()
+                'eTawjihiInscription' => $establishment->isETawjihiInscription(),
+                'anneesEtudes' => $establishment->getAnneesEtudes(),
+                'dureeEtudesMin' => $establishment->getDureeEtudesMin(),
+                'dureeEtudesMax' => $establishment->getDureeEtudesMax()
             ];
             
             // Le logo de la filière est toujours celui de l'établissement
-            $data['imageCouverture'] = $establishment->getLogo();
             $data['logo'] = $establishment->getLogo();
+            
+            // Pour imageCouverture : utiliser celle de la filière si elle existe, sinon celle de l'établissement
+            // Mais ne jamais utiliser le logo comme couverture
+            // Vérifier si imageCouverture de la filière est vide/null
+            if ((!isset($data['imageCouverture']) || empty($data['imageCouverture'])) && $establishment->getImageCouverture()) {
+                $data['imageCouverture'] = $establishment->getImageCouverture();
+            }
         }
 
         // Informations des campus
@@ -494,6 +548,36 @@ class FiliereController extends AbstractController
             ];
         }
         $data['campus'] = $campusData;
+
+        // Récupérer les secteurs associés à la filière
+        $secteursIds = $filiere->getSecteursIds() ?? [];
+        $secteursData = [];
+        foreach ($secteursIds as $secteurId) {
+            $secteur = $this->secteurRepository->find($secteurId);
+            if ($secteur) {
+                $secteursData[] = [
+                    'id' => $secteur->getId(),
+                    'titre' => $secteur->getTitre(),
+                    'code' => $secteur->getCode(),
+                    'icon' => $secteur->getIcon(),
+                    'image' => $secteur->getImage(),
+                ];
+            }
+        }
+        
+        // Ajouter les secteurs dans les données enrichies
+        $data['secteurs'] = $secteursData;
+        $data['secteursIds'] = $secteursIds;
+
+        // Debug: logger les secteurs pour vérifier
+        if (!empty($secteursIds)) {
+            $this->logger->info('Secteurs calculés pour la filière', [
+                'filiere_id' => $filiere->getId(),
+                'filiere_nom' => $filiere->getNom(),
+                'secteurs_ids' => $secteursIds,
+                'secteurs_count' => count($secteursData)
+            ]);
+        }
 
         return $data;
     }

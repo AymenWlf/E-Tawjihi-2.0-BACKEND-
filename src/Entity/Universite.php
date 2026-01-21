@@ -3,6 +3,8 @@
 namespace App\Entity;
 
 use App\Repository\UniversiteRepository;
+use Doctrine\Common\Collections\ArrayCollection;
+use Doctrine\Common\Collections\Collection;
 use Doctrine\DBAL\Types\Types;
 use Doctrine\ORM\Mapping as ORM;
 use Symfony\Component\Serializer\Annotation\Groups;
@@ -77,6 +79,14 @@ class Universite
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     #[Groups(['universite:read'])]
     private ?\DateTimeInterface $updatedAt = null;
+
+    #[ORM\OneToMany(targetEntity: Establishment::class, mappedBy: 'universite')]
+    private Collection $establishments;
+
+    public function __construct()
+    {
+        $this->establishments = new \Doctrine\Common\Collections\ArrayCollection();
+    }
 
     #[ORM\PrePersist]
     public function setCreatedAtValue(): void
@@ -258,6 +268,36 @@ class Universite
     public function setUpdatedAt(\DateTimeInterface $updatedAt): static
     {
         $this->updatedAt = $updatedAt;
+        return $this;
+    }
+
+    /**
+     * @return Collection<int, Establishment>
+     */
+    public function getEstablishments(): Collection
+    {
+        return $this->establishments;
+    }
+
+    public function addEstablishment(Establishment $establishment): static
+    {
+        if (!$this->establishments->contains($establishment)) {
+            $this->establishments->add($establishment);
+            $establishment->setUniversite($this);
+        }
+
+        return $this;
+    }
+
+    public function removeEstablishment(Establishment $establishment): static
+    {
+        if ($this->establishments->removeElement($establishment)) {
+            // set the owning side to null (unless already changed)
+            if ($establishment->getUniversite() === $this) {
+                $establishment->setUniversite(null);
+            }
+        }
+
         return $this;
     }
 }

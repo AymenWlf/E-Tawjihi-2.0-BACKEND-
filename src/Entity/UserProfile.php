@@ -96,6 +96,10 @@ class UserProfile
     #[ORM\Column(type: Types::BOOLEAN, nullable: true)]
     private ?bool $consentContact = false;
 
+    // Plan de réussite - Étapes complétées
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    private ?array $planReussiteSteps = null; // ['reportStepCompleted' => true, 'step3_visited' => true, etc.]
+
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     private ?\DateTimeInterface $createdAt = null;
 
@@ -385,6 +389,17 @@ class UserProfile
     public function setConsentContact(?bool $consentContact): self
     {
         $this->consentContact = $consentContact;
+        return $this;
+    }
+
+    public function getPlanReussiteSteps(): ?array
+    {
+        return $this->planReussiteSteps;
+    }
+
+    public function setPlanReussiteSteps(?array $planReussiteSteps): self
+    {
+        $this->planReussiteSteps = $planReussiteSteps;
         return $this;
     }
 

@@ -37,7 +37,7 @@ class Filiere
     private ?string $description = null;
 
     #[ORM\Column(length: 500, nullable: true)]
-    #[Groups(['filiere:read', 'filiere:write'])]
+    #[Groups(['filiere:read', 'filiere:write', 'filiere:list'])]
     private ?string $imageCouverture = null;
 
     #[ORM\Column(length: 100, nullable: true)]
@@ -91,6 +91,10 @@ class Filiere
     #[ORM\Column(type: Types::JSON, nullable: true)]
     #[Groups(['filiere:read', 'filiere:write'])]
     private ?array $combinaisonsBacMission = null; // Pour bac mission: [['Mathématiques', 'Physique-Chimie'], ['SVT', 'NSI']]
+
+    #[ORM\Column(type: Types::JSON, nullable: true)]
+    #[Groups(['filiere:read', 'filiere:write', 'filiere:list'])]
+    private ?array $secteursIds = null; // IDs des secteurs de métiers associés
 
     #[ORM\Column]
     #[Groups(['filiere:read', 'filiere:write', 'filiere:list'])]
@@ -173,6 +177,10 @@ class Filiere
     #[ORM\Column]
     #[Groups(['filiere:read', 'filiere:write', 'filiere:list'])]
     private ?bool $isSponsored = false;
+
+    #[ORM\Column(type: Types::INTEGER)]
+    #[Groups(['filiere:read', 'filiere:write', 'filiere:list'])]
+    private ?int $viewCount = 0; // Nombre de vues de la filière
 
     #[ORM\Column(type: Types::DATETIME_MUTABLE)]
     #[Groups(['filiere:read'])]
@@ -400,6 +408,17 @@ class Filiere
     public function setCombinaisonsBacMission(?array $combinaisonsBacMission): static
     {
         $this->combinaisonsBacMission = $combinaisonsBacMission;
+        return $this;
+    }
+
+    public function getSecteursIds(): ?array
+    {
+        return $this->secteursIds;
+    }
+
+    public function setSecteursIds(?array $secteursIds): static
+    {
+        $this->secteursIds = $secteursIds;
         return $this;
     }
 
@@ -633,6 +652,23 @@ class Filiere
     public function setIsSponsored(bool $isSponsored): static
     {
         $this->isSponsored = $isSponsored;
+        return $this;
+    }
+
+    public function getViewCount(): ?int
+    {
+        return $this->viewCount;
+    }
+
+    public function setViewCount(int $viewCount): static
+    {
+        $this->viewCount = $viewCount;
+        return $this;
+    }
+
+    public function incrementViewCount(): static
+    {
+        $this->viewCount = ($this->viewCount ?? 0) + 1;
         return $this;
     }
 

@@ -43,9 +43,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
     #[ORM\OneToOne(mappedBy: 'user', targetEntity: UserProfile::class, cascade: ['persist', 'remove'])]
     private ?UserProfile $profile = null;
 
-    #[ORM\OneToOne(mappedBy: 'user', targetEntity: OrientationTest::class, cascade: ['persist', 'remove'])]
-    private ?OrientationTest $orientationTest = null;
-
     #[ORM\OneToMany(mappedBy: 'user', targetEntity: TestSession::class, cascade: ['persist', 'remove'])]
     private Collection $testSessions;
 
@@ -164,27 +161,6 @@ class User implements UserInterface, PasswordAuthenticatedUserInterface
         return $this;
     }
 
-    public function getOrientationTest(): ?OrientationTest
-    {
-        return $this->orientationTest;
-    }
-
-    public function setOrientationTest(?OrientationTest $orientationTest): static
-    {
-        // unset the owning side of the relation if necessary
-        if ($orientationTest === null && $this->orientationTest !== null) {
-            $this->orientationTest->setUser(null);
-        }
-
-        // set the owning side of the relation if necessary
-        if ($orientationTest !== null && $orientationTest->getUser() !== $this) {
-            $orientationTest->setUser($this);
-        }
-
-        $this->orientationTest = $orientationTest;
-
-        return $this;
-    }
 
     /**
      * @return Collection<int, TestSession>
