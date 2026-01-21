@@ -5,6 +5,7 @@ namespace App\Controller\Api;
 use App\Entity\User;
 use App\Entity\UserProfile;
 use App\Repository\UserProfileRepository;
+use App\Repository\TestSessionRepository;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -681,7 +682,8 @@ class AuthController extends AbstractController
     public function updatePlanReussiteSteps(
         Request $request,
         #[CurrentUser] ?User $user,
-        EntityManagerInterface $em
+        EntityManagerInterface $em,
+        TestSessionRepository $testSessionRepository
     ): JsonResponse {
         if (!$user) {
             return new JsonResponse([
@@ -713,7 +715,68 @@ class AuthController extends AbstractController
         // Récupérer les étapes existantes ou initialiser un tableau vide
         $steps = $profile->getPlanReussiteSteps() ?? [];
         
-        // Marquer l'étape comme complétée
+        // Vérifier les prérequis selon l'étape
+        $canProceed = false;
+        $missingPrerequisite = null;
+        
+        switch ($step) {
+            case 'reportStepCompleted':
+                // Pour reportStepCompleted, vérifier que le test d'orientation est complété
+                $session = $testSessionRepository->findByUser($user->getId(), 'orientation');
+                if ($session && $session->isIsCompleted()) {
+                    $canProceed = true;
+                } else {
+                    $missingPrerequisite = 'Le test de diagnostic doit être complété avant de consulter le rapport';
+                }
+                break;
+                
+            case 'step3_visited':
+                // Pour step3_visited, vérifier que reportStepCompleted est true
+                if (isset($steps['reportStepCompleted']) && $steps['reportStepCompleted'] === true) {
+                    $canProceed = true;
+                } else {
+                    $missingPrerequisite = 'Le rapport d\'orientation doit être consulté avant d\'accéder aux secteurs de métiers';
+                }
+                break;
+                
+            case 'step4_visited':
+                // Pour step4_visited, vérifier que step3_visited est true
+                if (isset($steps['step3_visited']) && $steps['step3_visited'] === true) {
+                    $canProceed = true;
+                } else {
+                    $missingPrerequisite = 'Les secteurs de métiers doivent être consultés avant d\'accéder aux établissements';
+                }
+                break;
+                
+            case 'step5_visited':
+                // Pour step5_visited, vérifier que step4_visited est true
+                if (isset($steps['step4_visited']) && $steps['step4_visited'] === true) {
+                    $canProceed = true;
+                } else {
+                    $missingPrerequisite = 'Les établissements doivent être consultés avant d\'accéder aux services';
+                }
+                break;
+                
+            default:
+                // Pour les autres étapes, permettre la progression
+                $canProceed = true;
+                break;
+        }
+        
+        // Si les prérequis ne sont pas remplis, retourner une erreur
+        if (!$canProceed) {
+            return new JsonResponse([
+                'success' => false,
+                'message' => $missingPrerequisite ?? 'Les étapes précédentes doivent être complétées',
+                'data' => [
+                    'planReussiteSteps' => $steps,
+                    'canProceed' => false,
+                    'missingPrerequisite' => $missingPrerequisite
+                ]
+            ], Response::HTTP_BAD_REQUEST);
+        }
+        
+        // Marquer l'étape comme complétée seulement si les prérequis sont remplis
         $steps[$step] = true;
         
         // Si c'est reportStepCompleted, enregistrer aussi la date
@@ -729,7 +792,8 @@ class AuthController extends AbstractController
             'success' => true,
             'message' => 'Étape du plan de réussite mise à jour avec succès',
             'data' => [
-                'planReussiteSteps' => $steps
+                'planReussiteSteps' => $steps,
+                'canProceed' => true
             ]
         ]);
     }
