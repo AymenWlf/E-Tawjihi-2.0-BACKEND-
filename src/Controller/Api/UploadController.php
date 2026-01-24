@@ -244,4 +244,56 @@ class UploadController extends AbstractController
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
     }
+
+    /**
+     * Liste tous les fichiers du dossier nosecoles
+     */
+    #[Route('/nosecoles/list', name: 'list_nosecoles', methods: ['GET'])]
+    public function listNosecoles(): JsonResponse
+    {
+        try {
+            $nosecolesDir = $this->uploadsDirectory . '/nosecoles';
+            
+            if (!is_dir($nosecolesDir)) {
+                return $this->json([
+                    'success' => false,
+                    'message' => 'Dossier nosecoles non trouvé'
+                ], Response::HTTP_NOT_FOUND);
+            }
+
+            $files = [];
+            $allowedExtensions = ['png', 'jpg', 'jpeg', 'webp'];
+            
+            $directory = new \DirectoryIterator($nosecolesDir);
+            foreach ($directory as $file) {
+                if ($file->isFile() && !$file->isDot()) {
+                    $extension = strtolower($file->getExtension());
+                    if (in_array($extension, $allowedExtensions)) {
+                        $files[] = [
+                            'filename' => $file->getFilename(),
+                            'name' => pathinfo($file->getFilename(), PATHINFO_FILENAME),
+                            'url' => '/uploads/nosecoles/' . $file->getFilename()
+                        ];
+                    }
+                }
+            }
+
+            // Trier par nom de fichier
+            usort($files, function($a, $b) {
+                return strcmp($a['filename'], $b['filename']);
+            });
+
+            return $this->json([
+                'success' => true,
+                'data' => $files,
+                'count' => count($files)
+            ]);
+
+        } catch (\Exception $e) {
+            return $this->json([
+                'success' => false,
+                'message' => 'Erreur lors de la lecture du dossier: ' . $e->getMessage()
+            ], Response::HTTP_INTERNAL_SERVER_ERROR);
+        }
+    }
 }
