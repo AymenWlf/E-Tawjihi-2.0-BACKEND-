@@ -16,11 +16,8 @@ use Symfony\Component\HttpFoundation\Request;
 use Symfony\Component\HttpFoundation\Response;
 use Symfony\Component\Routing\Annotation\Route;
 
-#[Route('/sitemap', name: 'sitemap_')]
 class SitemapController extends AbstractController
 {
-    // URL du frontend (pas du backend)
-    private const FRONTEND_URL = 'https://e-tawjihi.ma';
     private const DATE_FORMAT = 'Y-m-d';
 
     public function __construct(
@@ -35,11 +32,11 @@ class SitemapController extends AbstractController
     /**
      * Génère la sitemap XML complète du site
      */
-    #[Route('.xml', name: 'index', methods: ['GET'])]
+    #[Route('/sitemap/sitemap.xml', name: 'sitemap_index', methods: ['GET'])]
     public function index(Request $request): Response
     {
-        // Toujours utiliser l'URL du frontend pour les URLs du sitemap
-        $baseUrl = self::FRONTEND_URL;
+        // Déterminer l'URL du frontend selon l'environnement
+        $baseUrl = $this->getFrontendUrl();
         $urls = [];
 
         // Pages statiques principales
@@ -48,7 +45,6 @@ class SitemapController extends AbstractController
         $urls[] = $this->createUrl($baseUrl . '/secteurs', '0.9', 'daily');
         $urls[] = $this->createUrl($baseUrl . '/services', '0.8', 'weekly');
         $urls[] = $this->createUrl($baseUrl . '/blog', '0.8', 'daily');
-        $urls[] = $this->createUrl($baseUrl . '/filieres', '0.8', 'daily');
 
         // Établissements (avec slug)
         $establishments = $this->establishmentRepository->findBy(['isActive' => true]);
@@ -94,22 +90,6 @@ class SitemapController extends AbstractController
             }
         }
 
-        // Filières (avec slug)
-        $filieres = $this->filiereRepository->findBy(['isActive' => true]);
-        foreach ($filieres as $filiere) {
-            if ($filiere->getSlug()) {
-                $lastmod = $filiere->getUpdatedAt() 
-                    ? $filiere->getUpdatedAt()->format(self::DATE_FORMAT)
-                    : date(self::DATE_FORMAT);
-                
-                $urls[] = $this->createUrl(
-                    $baseUrl . '/filieres/' . $filiere->getSlug(),
-                    '0.8',
-                    'monthly',
-                    $lastmod
-                );
-            }
-        }
 
         // Générer le XML
         $xml = $this->generateSitemapXml($urls);
@@ -165,5 +145,27 @@ class SitemapController extends AbstractController
         $xml .= '</urlset>';
 
         return $xml;
+    }
+
+    /**
+     * Récupère l'URL du frontend selon l'environnement
+     */
+    private function getFrontendUrl(): string
+    {
+        // Priorité 1: Variable d'environnement explicite
+        if (isset($_ENV['FRONTEND_URL']) && !empty($_ENV['FRONTEND_URL'])) {
+            return rtrim($_ENV['FRONTEND_URL'], '/');
+        }
+
+        // Priorité 2: Détection automatique selon l'environnement
+        $appEnv = $_ENV['APP_ENV'] ?? 'prod';
+        
+        if ($appEnv === 'dev') {
+            // En développement, utiliser localhost avec le port du frontend
+            return 'http://localhost:5174';
+        }
+
+        // Production par défaut
+        return 'https://e-tawjihi.ma';
     }
 }

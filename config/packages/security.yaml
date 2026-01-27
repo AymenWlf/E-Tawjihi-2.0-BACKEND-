@@ -13,6 +13,9 @@ security:
     dev:
       pattern: ^/(_(profiler|wdt)|css|images|js)/
       security: false
+    public:
+      pattern: ^/(sitemap|uploads)
+      security: false
     main:
       pattern: ^/api
       lazy: true
