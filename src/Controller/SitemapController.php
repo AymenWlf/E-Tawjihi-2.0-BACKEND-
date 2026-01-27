@@ -19,7 +19,8 @@ use Symfony\Component\Routing\Annotation\Route;
 #[Route('/sitemap', name: 'sitemap_')]
 class SitemapController extends AbstractController
 {
-    private const BASE_URL = 'https://e-tawjihi.ma';
+    // URL du frontend (pas du backend)
+    private const FRONTEND_URL = 'https://e-tawjihi.ma';
     private const DATE_FORMAT = 'Y-m-d';
 
     public function __construct(
@@ -37,7 +38,8 @@ class SitemapController extends AbstractController
     #[Route('.xml', name: 'index', methods: ['GET'])]
     public function index(Request $request): Response
     {
-        $baseUrl = $request->getSchemeAndHttpHost() ?: self::BASE_URL;
+        // Toujours utiliser l'URL du frontend pour les URLs du sitemap
+        $baseUrl = self::FRONTEND_URL;
         $urls = [];
 
         // Pages statiques principales
