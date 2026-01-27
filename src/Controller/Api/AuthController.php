@@ -821,4 +821,83 @@ class AuthController extends AbstractController
             ]
         ]);
     }
+
+    /**
+     * RESET PASSWORD WITH MANYCHAT
+     *
+     * @param Request $request
+     * @return Response
+     */
+    #[Route('/api/mdp_oublie', name: 'api.mdp_oublie', methods: ['POST'])]
+    public function mdp_oublie(
+        Request $request,
+        EntityManagerInterface $em,
+        UserPasswordHasherInterface $passwordHasher
+    ): JsonResponse {
+        $data = json_decode($request->getContent(), true);
+        $response = [
+            "password" => null
+        ];
+
+        if (!isset($data['whatsapp_phone'])) {
+            return new JsonResponse([
+                'password' => null,
+                'error' => 'whatsapp_phone is required'
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        $rawNumber = $data['whatsapp_phone'];
+
+        // Nettoyage du numéro : suppression de tous les caractères non numériques
+        $cleanNumber = preg_replace('/\D+/', '', $rawNumber);
+
+        // Conversion vers le format local
+        if (preg_match('/^(?:212|00212)?([5-7]\d{8})$/', $cleanNumber, $matches)) {
+            $localNumber = '0' . $matches[1];
+        } else {
+            $localNumber = $cleanNumber; // Numéro non reconnu, laissé tel quel
+        }
+
+        $user = $em->getRepository(User::class)->findOneBy(['phone' => $localNumber]);
+
+        if ($user) {
+            $password = $this->generateStrongPassword(15);
+            $user->setPassword(
+                $passwordHasher->hashPassword(
+                    $user,
+                    $password
+                )
+            );
+            $em->flush();
+            $response['password'] = $password;
+        }
+
+        // Envoi de la réponse
+        return new JsonResponse($response, Response::HTTP_OK);
+    }
+
+    /**
+     * Génère un mot de passe fort
+     */
+    private function generateStrongPassword(int $length = 15): string
+    {
+        $uppercase = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        $lowercase = 'abcdefghijklmnopqrstuvwxyz';
+        $numbers = '0123456789';
+        $special = '!@#$%^&*()_+-=[]{}|;:,.<>?';
+        
+        $all = $uppercase . $lowercase . $numbers . $special;
+        
+        $password = '';
+        $password .= $uppercase[random_int(0, strlen($uppercase) - 1)];
+        $password .= $lowercase[random_int(0, strlen($lowercase) - 1)];
+        $password .= $numbers[random_int(0, strlen($numbers) - 1)];
+        $password .= $special[random_int(0, strlen($special) - 1)];
+        
+        for ($i = strlen($password); $i < $length; $i++) {
+            $password .= $all[random_int(0, strlen($all) - 1)];
+        }
+        
+        return str_shuffle($password);
+    }
 }

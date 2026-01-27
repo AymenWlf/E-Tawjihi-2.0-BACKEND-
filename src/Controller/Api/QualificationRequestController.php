@@ -10,7 +10,10 @@ use App\Repository\QualificationRequestRepository;
 use App\Repository\EstablishmentRepository;
 use App\Repository\FiliereRepository;
 use App\Repository\CityRepository;
+use App\Service\HubSpotService;
+use App\Service\HubSpotRoundRobinService;
 use Doctrine\ORM\EntityManagerInterface;
+use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
 use Symfony\Component\HttpFoundation\JsonResponse;
 use Symfony\Component\HttpFoundation\Request;
@@ -25,7 +28,10 @@ class QualificationRequestController extends AbstractController
         private QualificationRequestRepository $qualificationRequestRepository,
         private EstablishmentRepository $establishmentRepository,
         private FiliereRepository $filiereRepository,
-        private CityRepository $cityRepository
+        private CityRepository $cityRepository,
+        private HubSpotService $hubSpotService,
+        private HubSpotRoundRobinService $hubSpotRoundRobinService,
+        private LoggerInterface $logger
     ) {
     }
 
@@ -102,6 +108,31 @@ class QualificationRequestController extends AbstractController
             $this->em->persist($qualificationRequest);
             $this->em->flush();
 
+            // Synchroniser avec HubSpot (non-bloquant)
+            try {
+                if ($this->hubSpotService->isConfigured()) {
+                    // Préparer les données pour HubSpot
+                    $hubSpotData = $this->prepareHubSpotData($data, $qualificationRequest);
+                    
+                    // Round robin pour obtenir le propriétaire
+                    $hubSpotOwnerId = $this->hubSpotRoundRobinService->getNextOwnerId();
+                    
+                    // Synchroniser (création ou mise à jour)
+                    $hubSpotContact = $this->hubSpotService->syncLeadToHubSpot(
+                        $hubSpotData, 
+                        $hubSpotOwnerId, 
+                        $request
+                    );
+                    
+                    if ($hubSpotContact) {
+                        $this->logger->info('✅ Contact HubSpot synchronisé depuis QualificationRequest - ID: ' . ($hubSpotContact['id'] ?? 'unknown'));
+                    }
+                }
+            } catch (\Exception $e) {
+                // Ne pas bloquer la réponse si HubSpot échoue
+                $this->logger->error('❌ Erreur synchronisation HubSpot (QualificationRequest): ' . $e->getMessage());
+            }
+
             return new JsonResponse([
                 'success' => true,
                 'message' => 'Formulaire de qualification soumis avec succès',
@@ -117,5 +148,44 @@ class QualificationRequestController extends AbstractController
                 'message' => 'Erreur lors de la sauvegarde: ' . $e->getMessage()
             ], Response::HTTP_INTERNAL_SERVER_ERROR);
         }
+    }
+
+    /**
+     * Prépare les données pour la synchronisation HubSpot
+     */
+    private function prepareHubSpotData(array $data, QualificationRequest $qualificationRequest): array
+    {
+        $hubSpotData = [
+            'nom_prenom' => $qualificationRequest->getNomPrenom(),
+            'telephone' => $qualificationRequest->getTelephone(),
+            'tuteur_eleve' => $qualificationRequest->getTuteurEleve(),
+            'source' => $qualificationRequest->getSource() ?? 'Plateforme/App',
+            'pret_payer' => $qualificationRequest->getPretPayer(),
+            'besoin_orientation' => $qualificationRequest->getBesoinOrientation(),
+            'besoin_test' => $qualificationRequest->getBesoinTest(),
+            'besoin_notification' => $qualificationRequest->getBesoinNotification(),
+            'besoin_inscription' => $qualificationRequest->getBesoinInscription(),
+        ];
+
+        // Ajouter les champs optionnels
+        if ($qualificationRequest->getTypeEcole()) {
+            $hubSpotData['type_ecole'] = $qualificationRequest->getTypeEcole();
+        }
+
+        if ($qualificationRequest->getVille()) {
+            $hubSpotData['ville'] = $qualificationRequest->getVille()->getTitre();
+        } elseif (isset($data['ville']) && is_string($data['ville'])) {
+            $hubSpotData['ville'] = $data['ville'];
+        }
+
+        if ($qualificationRequest->getNiveauEtude()) {
+            $hubSpotData['niveau_etude'] = $qualificationRequest->getNiveauEtude();
+        }
+
+        if ($qualificationRequest->getFiliereBac()) {
+            $hubSpotData['filiere_bac'] = $qualificationRequest->getFiliereBac();
+        }
+
+        return $hubSpotData;
     }
 }
