@@ -15,7 +15,7 @@ nelmio_cors:
             - 'https://apinew.e-tawjihi.ma'
             - 'https://www.apinew.e-tawjihi.ma'
         allow_methods: ['GET', 'OPTIONS', 'POST', 'PUT', 'PATCH', 'DELETE']
-        allow_headers: ['Content-Type', 'Authorization', 'X-Requested-With']
+        allow_headers: ['Content-Type', 'Authorization', 'X-Requested-With', 'User-Agent', 'whatsapp_phone']
         expose_headers: ['Link']
         max_age: 3600
         allow_credentials: true

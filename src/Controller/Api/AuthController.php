@@ -828,25 +828,45 @@ class AuthController extends AbstractController
      * @param Request $request
      * @return Response
      */
-    #[Route('/api/mdp_oublie', name: 'api.mdp_oublie', methods: ['POST'])]
+    #[Route('/api/mdp_oublie', name: 'api.mdp_oublie', methods: ['POST', 'OPTIONS'])]
     public function mdp_oublie(
         Request $request,
         EntityManagerInterface $em,
-        UserPasswordHasherInterface $passwordHasher
+        UserPasswordHasherInterface $passwordHasher,
+        LoggerInterface $logger
     ): JsonResponse {
-        $data = json_decode($request->getContent(), true);
+        // Gérer les requêtes OPTIONS (preflight CORS)
+        if ($request->getMethod() === 'OPTIONS') {
+            return new JsonResponse([], Response::HTTP_OK);
+        }
+
+        $logger->info('mdp_oublie: Request received', [
+            'method' => $request->getMethod(),
+            'content_type' => $request->headers->get('Content-Type'),
+            'content_length' => $request->headers->get('Content-Length'),
+        ]);
+
+        $data = json_decode($request->getContent(), true) ?? [];
         $response = [
             "password" => null
         ];
 
-        if (!isset($data['whatsapp_phone'])) {
+        // Récupérer whatsapp_phone depuis le body JSON
+        // ManyChat envoie les données dans le body JSON avec la clé whatsapp_phone
+        $rawNumber = $data['whatsapp_phone'] ?? null;
+
+        $logger->info('mdp_oublie: Data parsed', [
+            'has_whatsapp_phone' => !empty($rawNumber),
+            'data_keys' => array_keys($data),
+        ]);
+
+        if (empty($rawNumber)) {
+            $logger->warning('mdp_oublie: whatsapp_phone missing');
             return new JsonResponse([
                 'password' => null,
                 'error' => 'whatsapp_phone is required'
             ], Response::HTTP_BAD_REQUEST);
         }
-
-        $rawNumber = $data['whatsapp_phone'];
 
         // Nettoyage du numéro : suppression de tous les caractères non numériques
         $cleanNumber = preg_replace('/\D+/', '', $rawNumber);
@@ -857,6 +877,12 @@ class AuthController extends AbstractController
         } else {
             $localNumber = $cleanNumber; // Numéro non reconnu, laissé tel quel
         }
+
+        $logger->info('mdp_oublie: Phone processed', [
+            'raw' => $rawNumber,
+            'clean' => $cleanNumber,
+            'local' => $localNumber,
+        ]);
 
         $user = $em->getRepository(User::class)->findOneBy(['phone' => $localNumber]);
 
@@ -870,6 +896,14 @@ class AuthController extends AbstractController
             );
             $em->flush();
             $response['password'] = $password;
+            $logger->info('mdp_oublie: Password reset successful', [
+                'user_id' => $user->getId(),
+                'phone' => $localNumber,
+            ]);
+        } else {
+            $logger->info('mdp_oublie: User not found', [
+                'phone' => $localNumber,
+            ]);
         }
 
         // Envoi de la réponse
