@@ -36,7 +36,7 @@ class MarocFormController extends AbstractController
             }
 
             // Validation des champs requis
-            $requiredFields = ['nom_prenom', 'telephone'];
+            $requiredFields = ['nom_prenom', 'telephone', 'niveau_etude', 'filiere_bac'];
             foreach ($requiredFields as $field) {
                 if (empty($data[$field])) {
                     return new JsonResponse([

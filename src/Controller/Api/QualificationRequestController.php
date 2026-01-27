@@ -41,7 +41,7 @@ class QualificationRequestController extends AbstractController
         $data = json_decode($request->getContent(), true);
 
         // Validation des champs requis
-        $requiredFields = ['source', 'tuteur_eleve', 'nom_prenom', 'telephone', 'pret_payer'];
+        $requiredFields = ['source', 'tuteur_eleve', 'nom_prenom', 'telephone', 'pret_payer', 'niveau_etude', 'filiere_bac'];
         foreach ($requiredFields as $field) {
             if (!isset($data[$field]) || empty(trim($data[$field]))) {
                 return new JsonResponse([
@@ -65,12 +65,27 @@ class QualificationRequestController extends AbstractController
         }
 
         if (isset($data['ville']) && !empty($data['ville'])) {
-            // Si ville est un ID
+            $city = null;
+            
+            // Si ville est un ID numérique
             if (is_numeric($data['ville'])) {
-                $city = $this->cityRepository->find($data['ville']);
-                if ($city) {
-                    $qualificationRequest->setVille($city);
-                }
+                $city = $this->cityRepository->find((int)$data['ville']);
+            } 
+            // Si ville est une string (nom de ville), chercher par titre
+            elseif (is_string($data['ville'])) {
+                $city = $this->cityRepository->findOneBy(['titre' => trim($data['ville'])]);
+            }
+            
+            // Ne définir la ville que si elle existe dans la base de données
+            // Ne jamais créer de nouvelle ville
+            if ($city) {
+                $qualificationRequest->setVille($city);
+            } else {
+                // Logger un avertissement si la ville n'existe pas
+                $this->logger->warning('Ville non trouvée dans la base de données', [
+                    'ville_value' => $data['ville'],
+                    'type' => gettype($data['ville'])
+                ]);
             }
         }
 
@@ -172,11 +187,12 @@ class QualificationRequestController extends AbstractController
             $hubSpotData['type_ecole'] = $qualificationRequest->getTypeEcole();
         }
 
+        // Utiliser uniquement la ville de l'entité si elle existe (vérifiée en base)
+        // Ne jamais utiliser une ville string brute qui pourrait ne pas exister en base
         if ($qualificationRequest->getVille()) {
             $hubSpotData['ville'] = $qualificationRequest->getVille()->getTitre();
-        } elseif (isset($data['ville']) && is_string($data['ville'])) {
-            $hubSpotData['ville'] = $data['ville'];
         }
+        // Si la ville n'a pas été trouvée en base, ne pas l'envoyer à HubSpot
 
         if ($qualificationRequest->getNiveauEtude()) {
             $hubSpotData['niveau_etude'] = $qualificationRequest->getNiveauEtude();
