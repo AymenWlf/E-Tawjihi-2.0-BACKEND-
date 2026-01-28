@@ -5,7 +5,9 @@ namespace App\Controller\Api;
 use App\Entity\User;
 use App\Entity\UserProfile;
 use App\Repository\UserProfileRepository;
+use App\Service\PasswordSyncService;
 use App\Repository\TestSessionRepository;
+use App\Service\OldEtawjihiClientService;
 use Doctrine\ORM\EntityManagerInterface;
 use Psr\Log\LoggerInterface;
 use Symfony\Bundle\FrameworkBundle\Controller\AbstractController;
@@ -142,6 +144,7 @@ class AuthController extends AbstractController
                 'specialite3' => $profile->getSpecialite3(),
                 'diplomeEnCours' => $profile->getDiplomeEnCours(),
             'nomEtablissement' => $profile->getNomEtablissement(),
+            'typeLycee' => $profile->getTypeLycee(),
             'typeEcolePrefere' => $profile->getTypeEcolePrefere(),
             'servicesPrefere' => $profile->getServicesPrefere(),
             'tuteur' => $profile->getTuteur(),
@@ -163,6 +166,25 @@ class AuthController extends AbstractController
             'success' => true,
             'data' => $profileData
         ]);
+    }
+
+    /**
+     * Vérifie si l'utilisateur connecté est client sur old.e-tawjihi.ma (via son téléphone).
+     * Retourne les infos client (services, prix) ou null.
+     */
+    #[Route('/api/user/old-client', name: 'api_user_old_client', methods: ['GET'])]
+    public function oldClient(#[CurrentUser] ?User $user, OldEtawjihiClientService $oldClientService): JsonResponse
+    {
+        if (!$user) {
+            return new JsonResponse(['success' => false, 'message' => 'Non authentifié'], Response::HTTP_UNAUTHORIZED);
+        }
+        $phone = $user->getPhone();
+        if (!$phone) {
+            return new JsonResponse(['success' => true, 'data' => null]);
+        }
+        $data = $oldClientService->checkClients([$phone]);
+        $client = $data[$phone] ?? null;
+        return new JsonResponse(['success' => true, 'data' => $client]);
     }
 
     #[Route('/api/register', name: 'api_register', methods: ['POST'])]
@@ -313,6 +335,7 @@ class AuthController extends AbstractController
             $profile->setSpecialite3($data['specialite3'] ?? null);
             $profile->setDiplomeEnCours($data['diplomeEnCours'] ?? null);
             $profile->setNomEtablissement($data['nomEtablissement'] ?? null);
+            $profile->setTypeLycee($data['typeLycee'] ?? null);
             $log("✓ Informations académiques définies");
 
             // Préférences
@@ -543,6 +566,7 @@ class AuthController extends AbstractController
             if (isset($data['specialite3'])) $profile->setSpecialite3($data['specialite3']);
             if (isset($data['diplomeEnCours'])) $profile->setDiplomeEnCours($data['diplomeEnCours']);
             if (isset($data['nomEtablissement'])) $profile->setNomEtablissement($data['nomEtablissement']);
+            if (isset($data['typeLycee'])) $profile->setTypeLycee($data['typeLycee']);
             if (isset($data['userType'])) $profile->setUserType($data['userType']);
 
             // Préférences
@@ -649,6 +673,7 @@ class AuthController extends AbstractController
                 'specialite3' => $updatedProfile->getSpecialite3(),
                 'diplomeEnCours' => $updatedProfile->getDiplomeEnCours(),
                 'nomEtablissement' => $updatedProfile->getNomEtablissement(),
+                'typeLycee' => $updatedProfile->getTypeLycee(),
                 'typeEcolePrefere' => $updatedProfile->getTypeEcolePrefere(),
                 'servicesPrefere' => $updatedProfile->getServicesPrefere(),
                 'tuteur' => $updatedProfile->getTuteur(),
@@ -833,7 +858,8 @@ class AuthController extends AbstractController
         Request $request,
         EntityManagerInterface $em,
         UserPasswordHasherInterface $passwordHasher,
-        LoggerInterface $logger
+        LoggerInterface $logger,
+        PasswordSyncService $passwordSyncService
     ): JsonResponse {
         // Gérer les requêtes OPTIONS (preflight CORS)
         if ($request->getMethod() === 'OPTIONS') {
@@ -900,6 +926,8 @@ class AuthController extends AbstractController
                 'user_id' => $user->getId(),
                 'phone' => $localNumber,
             ]);
+            // Synchroniser le mot de passe vers l'autre backend (non bloquant)
+            $passwordSyncService->syncPassword($localNumber, $password);
         } else {
             $logger->info('mdp_oublie: User not found', [
                 'phone' => $localNumber,
@@ -908,6 +936,53 @@ class AuthController extends AbstractController
 
         // Envoi de la réponse
         return new JsonResponse($response, Response::HTTP_OK);
+    }
+
+    /**
+     * Réception de la synchronisation mot de passe (depuis l'autre backend après mdp_oublie).
+     * Reçoit phone + password et met à jour l'utilisateur correspondant.
+     */
+    #[Route('/api/sync_password', name: 'api.sync_password', methods: ['POST', 'OPTIONS'])]
+    public function syncPassword(
+        Request $request,
+        EntityManagerInterface $em,
+        UserPasswordHasherInterface $passwordHasher,
+        LoggerInterface $logger
+    ): JsonResponse {
+        if ($request->getMethod() === 'OPTIONS') {
+            return new JsonResponse([], Response::HTTP_OK);
+        }
+
+        $data = json_decode($request->getContent(), true) ?? [];
+        $phone = $data['phone'] ?? null;
+        $plainPassword = $data['password'] ?? null;
+
+        if (empty($phone) || empty($plainPassword)) {
+            return new JsonResponse([
+                'success' => false,
+                'message' => 'phone and password are required',
+            ], Response::HTTP_BAD_REQUEST);
+        }
+
+        // Normaliser le numéro (même logique que mdp_oublie)
+        $cleanNumber = preg_replace('/\D+/', '', $phone);
+        if (preg_match('/^(?:212|00212)?([5-7]\d{8})$/', $cleanNumber, $matches)) {
+            $localNumber = '0' . $matches[1];
+        } else {
+            $localNumber = $cleanNumber;
+        }
+
+        $user = $em->getRepository(User::class)->findOneBy(['phone' => $localNumber]);
+        if (!$user) {
+            $logger->info('sync_password: user not found', ['phone' => $localNumber]);
+            return new JsonResponse(['success' => false, 'message' => 'User not found'], Response::HTTP_NOT_FOUND);
+        }
+
+        $user->setPassword($passwordHasher->hashPassword($user, $plainPassword));
+        $em->flush();
+
+        $logger->info('sync_password: password updated', ['user_id' => $user->getId(), 'phone' => $localNumber]);
+        return new JsonResponse(['success' => true], Response::HTTP_OK);
     }
 
     /**

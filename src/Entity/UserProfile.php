@@ -26,7 +26,7 @@ class UserProfile
     #[ORM\Column(length: 100, nullable: true)]
     private ?string $niveau = null;
 
-    #[ORM\Column(length: 20, nullable: true)]
+    #[ORM\Column(name: 'bac_type', length: 20, nullable: true)]
     private ?string $bacType = null; // 'normal' ou 'mission'
 
     #[ORM\Column(length: 255, nullable: true)]
@@ -46,6 +46,10 @@ class UserProfile
 
     #[ORM\Column(length: 255, nullable: true)]
     private ?string $nomEtablissement = null;
+
+    /** Type de lycée : 'public' ou 'prive' */
+    #[ORM\Column(length: 20, nullable: true)]
+    private ?string $typeLycee = null;
 
     // Préférences
     #[ORM\Column(type: Types::JSON, nullable: true)]
@@ -224,6 +228,17 @@ class UserProfile
     public function setNomEtablissement(?string $nomEtablissement): self
     {
         $this->nomEtablissement = $nomEtablissement;
+        return $this;
+    }
+
+    public function getTypeLycee(): ?string
+    {
+        return $this->typeLycee;
+    }
+
+    public function setTypeLycee(?string $typeLycee): self
+    {
+        $this->typeLycee = $typeLycee;
         return $this;
     }
 

@@ -33,6 +33,7 @@ security:
     - { path: ^/api/mdp_oublie, roles: PUBLIC_ACCESS }
     - { path: ^/api/external, roles: PUBLIC_ACCESS }
     - { path: ^/api/cities, roles: PUBLIC_ACCESS }
+    - { path: ^/api/sync_password, roles: PUBLIC_ACCESS }
     # - { path: ^/admin, roles: ROLE_ADMIN }
     # - { path: ^/profile, roles: ROLE_USER }
 

@@ -5,6 +5,9 @@
 # https://symfony.com/doc/current/best_practices.html#use-parameters-for-application-configuration
 parameters:
     uploads_directory: '%kernel.project_dir%/public/uploads'
+    sync_password_backend_url: ''
+    # En dev, vérification client utilise localhost:8000 si OLD_ETAWJIHI_API_URL non défini.
+    old_etawjihi_api_url: ''
 
 services:
     # default configuration for services in *this* file
@@ -30,3 +33,13 @@ services:
     App\Service\MigrationService:
         arguments:
             $kernelProjectDir: '%kernel.project_dir%'
+
+    # Synchronisation mot de passe vers autre backend (mot de passe oublié)
+    App\Service\PasswordSyncService:
+        arguments:
+            $syncBackendUrl: '%env(default:sync_password_backend_url:SYNC_PASSWORD_BACKEND_URL)%'
+
+    # Vérification clients (check-clients). En dev : localhost:8000.
+    App\Service\OldEtawjihiClientService:
+        arguments:
+            $oldApiUrl: '%env(default:old_etawjihi_api_url:OLD_ETAWJIHI_API_URL)%'

@@ -1,0 +1,4 @@
+# En dev : vérification client (check-clients).
+# Par défaut : http://localhost:8000 (e-tawjihi old). Override avec OLD_ETAWJIHI_API_URL dans .env si besoin.
+parameters:
+    old_etawjihi_api_url: 'http://localhost:8000'
