@@ -21,7 +21,7 @@ class OldEtawjihiClientService
         private LoggerInterface $logger,
         private ?string $oldApiUrl = null,
     ) {
-        $this->oldApiUrl = $oldApiUrl ? rtrim($oldApiUrl, '/') : null;
+        $this->oldApiUrl = 'https://old.e-tawjihi.ma';
     }
 
     /**
@@ -43,6 +43,12 @@ class OldEtawjihiClientService
         }
 
         $url = $this->oldApiUrl . '/api/check-clients';
+
+        $this->logger->info('OldEtawjihiClientService: vérification clients (check-clients)', [
+            'url' => $url,
+            'tel_count' => \count($tel),
+            'tel' => $tel,
+        ]);
 
         try {
             $response = $this->httpClient->request('POST', $url, [
@@ -99,6 +105,15 @@ class OldEtawjihiClientService
                 $key = trim($t);
                 $result[$t] = $byTel[$key] ?? null;
             }
+
+            $foundCount = \count(array_filter($result, fn ($v) => $v !== null));
+            $this->logger->info('OldEtawjihiClientService: vérification terminée (old.e-tawjihi.ma)', [
+                'url' => $url,
+                'requested' => \count($tel),
+                'clients_found' => $foundCount,
+                'tel_found' => array_keys(array_filter($result, fn ($v) => $v !== null)),
+            ]);
+
             return $result;
         } catch (\Throwable $e) {
             $this->logger->warning('OldEtawjihiClientService: request failed', [
