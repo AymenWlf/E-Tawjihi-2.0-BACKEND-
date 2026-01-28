@@ -47,7 +47,10 @@ class OldEtawjihiClientService
         try {
             $response = $this->httpClient->request('POST', $url, [
                 'json' => ['tel' => $tel],
-                'headers' => ['Content-Type' => 'application/json'],
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'User-Agent' => 'E-Tawjihi-Backend-apinew/1.0 (check-clients)',
+                ],
                 'timeout' => 15,
             ]);
 

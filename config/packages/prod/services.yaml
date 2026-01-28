@@ -1,0 +1,5 @@
+# En prod : URL de l'API old (old.e-tawjihi.ma) pour check-clients.
+# apinew.e-tawjihi.ma interroge old.e-tawjihi.ma via POST /api/check-clients.
+# Surcharge possible avec la variable d'environnement OLD_ETAWJIHI_API_URL.
+parameters:
+    old_etawjihi_api_url: 'https://old.e-tawjihi.ma'
